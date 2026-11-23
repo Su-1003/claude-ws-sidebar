@@ -1,0 +1,13 @@
+# 备份文件
+*.bak*
+
+# VS Code 扩展开发
+.vscode/
+node_modules/
+
+# 测试 fixture（包含真实会话数据）
+test/fixture/
+
+# OS
+.DS_Store
+Thumbs.db

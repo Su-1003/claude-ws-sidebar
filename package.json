@@ -1,0 +1,223 @@
+{
+  "name": "claude-ws-sidebar",
+  "displayName": "Claude 工作空间",
+  "description": "像 DSH 一样按工作区分组显示 Claude Code 会话，一键切换工作区",
+  "version": "0.1.0",
+  "publisher": "local-wyj",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:claudeWs.view",
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "views": {
+      "claude-sessions-sidebar": [
+        {
+          "id": "claudeWs.view",
+          "name": "工作区"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "claudeWs.view",
+        "contents": "没有找到工作区。\n[重试](command:claudeWs.refresh)"
+      }
+    ],
+    "commands": [
+      {
+        "command": "claudeWs.refresh",
+        "title": "刷新",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "claudeWs.newSession",
+        "title": "新建会话",
+        "icon": "$(add)"
+      },
+      {
+        "command": "claudeWs.pickWorkspace",
+        "title": "切换工作区…",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "claudeWs.workspaceActions",
+        "title": "工作区操作"
+      },
+      {
+        "command": "claudeWs.resume",
+        "title": "恢复会话"
+      },
+      {
+        "command": "claudeWs.resumeTerminal",
+        "title": "在终端中打开会话"
+      },
+      {
+        "command": "claudeWs.renameSession",
+        "title": "重命名会话"
+      },
+      {
+        "command": "claudeWs.copySessionId",
+        "title": "复制会话 ID"
+      },
+      {
+        "command": "claudeWs.revealSession",
+        "title": "在文件夹中显示"
+      },
+      {
+        "command": "claudeWs.deleteSession",
+        "title": "删除会话"
+      },
+      {
+        "command": "claudeWs.openInExplorer",
+        "title": "在资源管理器中显示"
+      },
+      {
+        "command": "claudeWs.newSessionTerminal",
+        "title": "在此新建会话（终端）"
+      },
+      {
+        "command": "claudeWs.restoreFromTrash",
+        "title": "从回收站恢复会话",
+        "icon": "$(history)"
+      },
+      {
+        "command": "claudeWs.repatchNow",
+        "title": "恢复 Claude 扩展本地补丁",
+        "icon": "$(wrench)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "claudeWs.newSession",
+          "when": "view == claudeWs.view",
+          "group": "navigation@1"
+        },
+        {
+          "command": "claudeWs.pickWorkspace",
+          "when": "view == claudeWs.view",
+          "group": "navigation@2"
+        },
+        {
+          "command": "claudeWs.refresh",
+          "when": "view == claudeWs.view",
+          "group": "navigation@3"
+        },
+        {
+          "command": "claudeWs.restoreFromTrash",
+          "when": "view == claudeWs.view",
+          "group": "navigation@4"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "claudeWs.newSessionTerminal",
+          "when": "view == claudeWs.view && viewItem == claudeWorkspace",
+          "group": "1_main@0"
+        },
+        {
+          "command": "claudeWs.openInExplorer",
+          "when": "view == claudeWs.view && viewItem == claudeWorkspace",
+          "group": "1_main@1"
+        },
+        {
+          "command": "claudeWs.resume",
+          "when": "view == claudeWs.view && viewItem == claudeSession",
+          "group": "inline"
+        },
+        {
+          "command": "claudeWs.resumeTerminal",
+          "when": "view == claudeWs.view && viewItem == claudeSession",
+          "group": "1_main@2"
+        },
+        {
+          "command": "claudeWs.renameSession",
+          "when": "view == claudeWs.view && viewItem == claudeSession",
+          "group": "2_edit@1"
+        },
+        {
+          "command": "claudeWs.copySessionId",
+          "when": "view == claudeWs.view && viewItem == claudeSession",
+          "group": "2_edit@2"
+        },
+        {
+          "command": "claudeWs.revealSession",
+          "when": "view == claudeWs.view && viewItem == claudeSession",
+          "group": "2_edit@3"
+        },
+        {
+          "command": "claudeWs.deleteSession",
+          "when": "view == claudeWs.view && viewItem == claudeSession",
+          "group": "9_danger@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Claude 工作空间",
+      "properties": {
+        "claudeWs.workspaceFile": {
+          "type": "string",
+          "default": "E:\\Agent\\Claude\\Claude.code-workspace",
+          "description": "多根工作区文件；工作区列表从这里读（路径失效时自动找同目录最新的 *.code-workspace）"
+        },
+        "claudeWs.workspaceRoot": {
+          "type": "string",
+          "default": "E:\\Agent\\Claude",
+          "description": "工作区文件读不到时，回退扫描这个目录"
+        },
+        "claudeWs.hiddenWorkspaces": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["tools", "claude-global"],
+          "description": "不显示的目录名（按名字匹配，大小写不敏感）。工作区文件读不到、回退扫描目录时用来挡掉杂项目录。"
+        },
+        "claudeWs.showOtherSessions": {
+          "type": "boolean",
+          "default": false,
+          "description": "显示「其他位置」分组（工作目录不属于任何工作区的会话）。默认关闭。"
+        },
+        "claudeWs.projectsDir": {
+          "type": "string",
+          "default": "",
+          "description": "Claude Code 会话目录，留空 = ~/.claude/projects"
+        },
+        "claudeWs.maxSessionsPerWorkspace": {
+          "type": "number",
+          "default": 8,
+          "description": "每个工作区最多显示多少个会话"
+        },
+        "claudeWs.preferOfficialPanel": {
+          "type": "boolean",
+          "default": true,
+          "description": "点会话时优先用官方 Claude Code 扩展在编辑器标签页打开（需已安装 anthropic.claude-code）；关闭后一律开终端"
+        },
+        "claudeWs.newSessionUsesPanel": {
+          "type": "boolean",
+          "default": true,
+          "description": "新建会话时用官方 Claude Code 对话面板（不是终端）；关闭后回到终端"
+        },
+        "claudeWs.guardModelEnv": {
+          "type": "boolean",
+          "default": true,
+          "description": "守护 ~/.claude/settings.json 里的三个模型名（Opus/Sonnet/Fable 的 ANTHROPIC_DEFAULT_*_MODEL），被外部工具改回旧值时自动纠正。关掉后不再干预。"
+        },
+        "claudeWs.syncGlobalOnChange": {
+          "type": "boolean",
+          "default": true,
+          "description": "监听 ~/.claude/CLAUDE.md，内容一变就自动跑 tools/sync-global.ps1 同步到桌面端镜像 claude-global/CLAUDE.md（脚本自带 MD5 核对）。"},
+        "claudeWs.backupOnStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "VS Code 启动时把 ~/.claude/projects 增量快照到 E:\\Agent\\Claude\\日常\\work\\backup\\projects（保留最近 7 个；脚本 tools/backup-projects.ps1）。"
+        }
+      }
+    }
+  }
+}
