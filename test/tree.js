@@ -1,6 +1,7 @@
 'use strict';
 
 // 用最小 vscode 桩跑一遍扩展，验证树结构、当前工作区判定、空工作区占位都正常。
+// 所有路径均为测试桩数据，不依赖任何真实目录。
 const Module = require('module');
 const path = require('path');
 
@@ -27,6 +28,7 @@ class TreeItem {
 
 let capturedProvider = null;
 
+const TEST_ROOT = '/test-data';
 const stub = {
   EventEmitter,
   TreeItem,
@@ -37,7 +39,7 @@ const stub = {
   Uri: { file: (p) => ({ fsPath: p, scheme: 'file' }) },
   env: { clipboard: { writeText: async () => {} } },
   window: {
-    activeTextEditor: { document: { uri: { fsPath: 'E:\\Agent\\Claude\\KeY\\KeY\\a.md' } } },
+    activeTextEditor: { document: { uri: { fsPath: TEST_ROOT + '/projects/alpha/file.md' } } },
     createTreeView: (id, opts) => {
       capturedProvider = opts.treeDataProvider;
       return { id, description: '', dispose() {} };
@@ -58,17 +60,17 @@ const stub = {
   extensions: { getExtension: () => undefined },
   workspace: {
     createFileSystemWatcher: () => ({ onDidCreate: () => ({ dispose() {} }), onDidChange: () => ({ dispose() {} }), onDidDelete: () => ({ dispose() {} }), dispose() {} }),
-    workspaceFile: { fsPath: 'E:\\Agent\\Claude\\Claude工作空间.code-workspace' },
+    workspaceFile: { fsPath: TEST_ROOT + '/workspace.code-workspace' },
     workspaceFolders: [
-      { uri: { fsPath: 'E:\\Agent\\Claude\\Workspace' }, name: 'Workspace' },
-      { uri: { fsPath: 'E:\\Agent\\Claude\\日常' }, name: '日常' },
-      { uri: { fsPath: 'E:\\Agent\\Claude\\KeY' }, name: 'KeY' },
-      { uri: { fsPath: 'E:\\Agent\\Claude\\图' }, name: '图' },
+      { uri: { fsPath: TEST_ROOT + '/workspace' }, name: 'workspace' },
+      { uri: { fsPath: TEST_ROOT + '/daily' }, name: 'daily' },
+      { uri: { fsPath: TEST_ROOT + '/projects' }, name: 'projects' },
+      { uri: { fsPath: TEST_ROOT + '/assets' }, name: 'assets' },
     ],
     getConfiguration: () => ({
       get(k) {
-        if (k === 'workspaceFile') return 'E:\\Agent\\Claude\\Claude工作空间.code-workspace';
-        if (k === 'workspaceRoot') return 'E:\\Agent\\Claude';
+        if (k === 'workspaceFile') return TEST_ROOT + '/workspace.code-workspace';
+        if (k === 'workspaceRoot') return TEST_ROOT;
         if (k === 'projectsDir') return '';
         if (k === 'maxSessionsPerWorkspace') return 8;
         return undefined;
@@ -78,7 +80,7 @@ const stub = {
       const p = uri.fsPath.toLowerCase();
       for (const f of stub.workspace.workspaceFolders) {
         const root = f.uri.fsPath.toLowerCase();
-        if (p === root || p.startsWith(root + '\\')) return f;
+        if (p === root || p.startsWith(root + '/')) return f;
       }
       return undefined;
     },
@@ -128,22 +130,26 @@ for (const r of roots) {
 
 // 验证点击会话会发 claude --resume
 const resumeCmd = registered.find((r) => r.id === 'claudeWs.resume');
-const keyWs = roots.find((r) => r.ws.path.endsWith('KeY'));
-const sess = capturedProvider.getChildren(keyWs)[0];
-const origCreate = stub.window.createTerminal;
-let last = null;
-stub.window.createTerminal = (o) => {
-  last = origCreate(o);
-  return last;
-};
-resumeCmd.fn(sess).then(() => {
-  console.log('\nresume → terminal cwd =', last && last.cwd);
-  console.log('resume → sendText =', last && last.sent);
+const keyWs = roots.find((r) => r.ws.path.endsWith('projects'));
+if (keyWs) {
+  const sess = capturedProvider.getChildren(keyWs)[0];
+  const origCreate = stub.window.createTerminal;
+  let last = null;
+  stub.window.createTerminal = (o) => {
+    last = origCreate(o);
+    return last;
+  };
+  resumeCmd.fn(sess).then(() => {
+    console.log('\nresume → terminal cwd =', last && last.cwd);
+    console.log('resume → sendText =', last && last.sent);
+  });
+}
 
-  // 空工作区占位（造一个不存在的目录工作区）
-  const fakeWs = { kind: 'workspace', ws: { name: '空测试', path: 'E:\\Agent\\Claude\\不存在' }, current: false, sessions: [] };
-  const kids2 = capturedProvider.getChildren(fakeWs);
+// 空工作区占位（造一个不存在的目录工作区）
+const fakeWs = { kind: 'workspace', ws: { name: 'empty-test', path: TEST_ROOT + '/nonexistent' }, current: false, sessions: [] };
+const kids2 = capturedProvider.getChildren(fakeWs);
+if (kids2.length) {
   const k0 = capturedProvider.getTreeItem(kids2[0]);
   console.log('\n空工作区子节点:', kids2[0].kind, '→', k0.label);
-  console.log('\nOK');
-});
+}
+console.log('\nOK');

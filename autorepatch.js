@@ -17,9 +17,13 @@ const os = require('os');
 const { execFile } = require('child_process');
 
 const STATE_KEY = 'ccExtRepatch.dir';
-const REPATCH_CANDIDATES = [
-  'E:\\Agent\\Claude\\图\\work\\claude-ui\\repatch.js',
-];
+
+function findRepatch() {
+  const cfg = vscode.workspace.getConfiguration('claudeWs').get('repatchScript', '');
+  if (!cfg) return null;
+  try { if (fs.statSync(cfg).isFile()) return cfg; } catch (e) { /* 忽略 */ }
+  return null;
+}
 // 命令 id 随 VS Code 版本不同：本机 1.145.2 里叫 reloadWebviewAction（命令面板显示 "Developer: Reload Webviews"）
 const RELOAD_WEBVIEW_CMDS = [
   'workbench.action.webview.reloadWebviewAction',
@@ -92,7 +96,7 @@ function check(context, opts) {
 
   const script = findRepatch();
   if (!script) {
-    log(`找不到 repatch.js（查过：${REPATCH_CANDIDATES.join('；')}），跳过。`);
+    log(`找不到 repatch.js（请在设置 claudeWs.repatchScript 中指定路径），跳过。`);
     if (force) vscode.window.showWarningMessage('找不到 repatch.js，无法恢复补丁。');
     return;
   }
@@ -153,18 +157,14 @@ module.exports = { check, log, startEnvGuard, startGlobalSyncWatch, startProject
 // 这里监听该文件，发现三项对不上就纠正回来。可在 VS Code 设置里关闭：
 //   "claudeWs.guardModelEnv": false
 const CLAUDE_SETTINGS = path.join(os.homedir(), '.claude', 'settings.json');
-const WANT_ENV = {
-  ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-5-5[1M]',
-  ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-5-5',
-  ANTHROPIC_DEFAULT_FABLE_MODEL: 'claude-fable-5-2[1M]',
-};
 
 let envWatcher = null;
 let envTimer = null;
 let envLastFix = 0;
 
 function fixEnvIfNeeded(reason) {
-  if (!vscode.workspace.getConfiguration('claudeWs').get('guardModelEnv', true)) return;
+  const cfg = vscode.workspace.getConfiguration('claudeWs');
+  if (!cfg.get('guardModelEnv', false)) return;
   let data;
   try {
     data = JSON.parse(fs.readFileSync(CLAUDE_SETTINGS, 'utf8'));
@@ -173,12 +173,13 @@ function fixEnvIfNeeded(reason) {
   }
   const env = data && data.env;
   if (!env) return;
-  const drifted = Object.keys(WANT_ENV).filter((k) => env[k] !== WANT_ENV[k]);
+  const wantEnv = cfg.get('guardModelEnvValues', {});
+  const drifted = Object.keys(wantEnv).filter((k) => env[k] !== wantEnv[k]);
   if (!drifted.length) return;
   // 冷却 60s，避免和写入方互相拉锯
   if (Date.now() - envLastFix < 60000) return;
   envLastFix = Date.now();
-  for (const k of drifted) env[k] = WANT_ENV[k];
+  for (const k of drifted) env[k] = wantEnv[k];
   try {
     fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(data, null, 2) + '\n', 'utf8');
     log(`已纠正被改写的模型名（${reason}）：${drifted.join(', ')}`);
@@ -202,15 +203,12 @@ function startEnvGuard() {
 }
 
 /* ---------------- 全局 CLAUDE.md → 镜像 自动同步 ---------------- */
-// 桌面版读不到 ~/.claude/CLAUDE.md，只读 E:\Agent\Claude\claude-global\CLAUDE.md（挂载进 VM）。
-// 这里监听真身文件，一变就跑 tools\sync-global.ps1（脚本自带 MD5 核对），
-// 保证下一个桌面会话开始前镜像已经是最新。可用 "claudeWs.syncGlobalOnChange": false 关闭。
+// 监听 ~/.claude/CLAUDE.md，一变就跑指定脚本同步到桌面端镜像（脚本自带 MD5 核对）。
+// 需要同时配置 claudeWs.syncGlobalScript 和 claudeWs.syncGlobalDst 才能启用。
+// 可用 "claudeWs.syncGlobalOnChange": false 关闭。
 const crypto = require('crypto');
 const GLOBAL_SRC = path.join(os.homedir(), '.claude', 'CLAUDE.md');
-const GLOBAL_DST = 'E:/Agent/Claude/claude-global/CLAUDE.md';
-const SYNC_SCRIPT = 'E:/Agent/Claude/tools/sync-global.ps1';
 const PWSH_CANDIDATES = [
-  'C:/Users/WYingJie/.local/pwsh7/pwsh.exe',
   'pwsh.exe',
   'powershell.exe',
 ];
@@ -232,18 +230,22 @@ function pickPwsh() {
 }
 
 function syncGlobalIfNeeded(reason) {
-  if (!vscode.workspace.getConfiguration('claudeWs').get('syncGlobalOnChange', true)) return;
+  const cfg = vscode.workspace.getConfiguration('claudeWs');
+  if (!cfg.get('syncGlobalOnChange', false)) return;
+  const script = cfg.get('syncGlobalScript', '');
+  const dst = cfg.get('syncGlobalDst', '');
+  if (!script || !dst) return;
   if (globalBusy) return;
   try {
     if (!fs.existsSync(GLOBAL_SRC)) return;
-    if (fs.existsSync(GLOBAL_DST) && md5(GLOBAL_SRC) === md5(GLOBAL_DST)) return;
+    if (fs.existsSync(dst) && md5(GLOBAL_SRC) === md5(dst)) return;
   } catch (e) {
     return;
   }
   globalBusy = true;
   execFile(
     pickPwsh(),
-    ['-NoProfile', '-File', SYNC_SCRIPT],
+    ['-NoProfile', '-File', script],
     { timeout: 60000, windowsHide: true },
     (err, stdout, stderr) => {
       globalBusy = false;
@@ -273,28 +275,28 @@ function startGlobalSyncWatch() {
 }
 
 /* ---------------- 聊天记录自动备份 ---------------- */
-// 聊天记录（~/.claude/projects 下的 jsonl）在本机只有一份，躺在 C 盘。这里在 VS Code 启动时
-// 跑一次 tools/backup-projects.ps1：增量快照到 E:/Agent/Claude/日常/work/backup/projects/<日期>，
-// 保留最近 7 个快照，并核对文件数与字节数。脚本自带单实例锁 + 30 分钟去重，
-// 多窗口同时启动也只会真跑一次。可用 "claudeWs.backupOnStart": false 关闭。
-const BACKUP_SCRIPT = 'E:/Agent/Claude/tools/backup-projects.ps1';
+// VS Code 启动时跑一次指定的备份脚本，增量快照 ~/.claude/projects 到指定目录。
+// 需要同时配置 claudeWs.backupScript 才能启用。可用 "claudeWs.backupOnStart": false 关闭。
 let backupStarted = false;
 
 function startProjectBackup() {
   if (backupStarted) return;
-  if (vscode.workspace.getConfiguration('claudeWs').get('backupOnStart', true) !== true) return;
+  const cfg = vscode.workspace.getConfiguration('claudeWs');
+  if (cfg.get('backupOnStart', false) !== true) return;
+  const script = cfg.get('backupScript', '');
+  if (!script) return;
   backupStarted = true;
   // 启动后 20 秒再跑，避开扩展激活高峰
   setTimeout(() => {
     try {
-      if (!fs.existsSync(BACKUP_SCRIPT)) {
-        log(`找不到备份脚本：${BACKUP_SCRIPT}`);
+      if (!fs.existsSync(script)) {
+        log(`找不到备份脚本：${script}`);
         return;
       }
     } catch (e) { return; }
     execFile(
       pickPwsh(),
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', BACKUP_SCRIPT],
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script],
       { timeout: 600000, windowsHide: true },
       (err, stdout, stderr) => {
         const text = `${stdout || ''}${stderr || ''}`.trim();

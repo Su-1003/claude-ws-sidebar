@@ -164,19 +164,19 @@
       "properties": {
         "claudeWs.workspaceFile": {
           "type": "string",
-          "default": "E:\\Agent\\Claude\\Claude.code-workspace",
-          "description": "多根工作区文件；工作区列表从这里读（路径失效时自动找同目录最新的 *.code-workspace）"
+          "default": "",
+          "description": "多根工作区文件；工作区列表从这里读（为空时自动扫描 workspaceRoot）"
         },
         "claudeWs.workspaceRoot": {
           "type": "string",
-          "default": "E:\\Agent\\Claude",
-          "description": "工作区文件读不到时，回退扫描这个目录"
+          "default": "",
+          "description": "工作区文件为空时，回退扫描这个目录（为空则使用 VS Code 当前工作区根目录）"
         },
         "claudeWs.hiddenWorkspaces": {
           "type": "array",
           "items": { "type": "string" },
-          "default": ["tools", "claude-global"],
-          "description": "不显示的目录名（按名字匹配，大小写不敏感）。工作区文件读不到、回退扫描目录时用来挡掉杂项目录。"
+          "default": [],
+          "description": "不显示的目录名（按名字匹配，大小写不敏感）。回退扫描目录时用来挡掉杂项目录。"
         },
         "claudeWs.showOtherSessions": {
           "type": "boolean",
@@ -205,17 +205,47 @@
         },
         "claudeWs.guardModelEnv": {
           "type": "boolean",
-          "default": true,
-          "description": "守护 ~/.claude/settings.json 里的三个模型名（Opus/Sonnet/Fable 的 ANTHROPIC_DEFAULT_*_MODEL），被外部工具改回旧值时自动纠正。关掉后不再干预。"
+          "default": false,
+          "description": "守护 ~/.claude/settings.json 里的三个模型名（Opus/Sonnet/Fable 的 ANTHROPIC_DEFAULT_*_MODEL），被外部工具改回旧值时自动纠正。默认关闭。"
+        },
+        "claudeWs.guardModelEnvValues": {
+          "type": "object",
+          "default": {
+            "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-4-20250514",
+            "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-4-20250514",
+            "ANTHROPIC_DEFAULT_FABLE_MODEL": "claude-opus-4-20250514"
+          },
+          "description": "guardModelEnv 启用时要维持的模型名映射。键为环境变量名，值为期望值。"
+        },
+        "claudeWs.repatchScript": {
+          "type": "string",
+          "default": "",
+          "description": "Claude 扩展 UI 补丁恢复脚本（repatch.js）的绝对路径。为空则不自动恢复补丁。"
         },
         "claudeWs.syncGlobalOnChange": {
           "type": "boolean",
-          "default": true,
-          "description": "监听 ~/.claude/CLAUDE.md，内容一变就自动跑 tools/sync-global.ps1 同步到桌面端镜像 claude-global/CLAUDE.md（脚本自带 MD5 核对）。"},
+          "default": false,
+          "description": "监听 ~/.claude/CLAUDE.md 变化并同步到桌面端镜像。需同时配置 syncGlobalScript 和 syncGlobalDst。默认关闭。"
+        },
+        "claudeWs.syncGlobalScript": {
+          "type": "string",
+          "default": "",
+          "description": "全局 CLAUDE.md 同步脚本（sync-global.ps1）的绝对路径。为空则不启用同步。"
+        },
+        "claudeWs.syncGlobalDst": {
+          "type": "string",
+          "default": "",
+          "description": "全局 CLAUDE.md 的镜像目标路径（桌面端挂载目录中的 CLAUDE.md）。为空则不启用同步。"
+        },
         "claudeWs.backupOnStart": {
           "type": "boolean",
-          "default": true,
-          "description": "VS Code 启动时把 ~/.claude/projects 增量快照到 E:\\Agent\\Claude\\日常\\work\\backup\\projects（保留最近 7 个；脚本 tools/backup-projects.ps1）。"
+          "default": false,
+          "description": "VS Code 启动时增量备份 ~/.claude/projects。需配置 backupScript。默认关闭。"
+        },
+        "claudeWs.backupScript": {
+          "type": "string",
+          "default": "",
+          "description": "聊天记录备份脚本（backup-projects.ps1）的绝对路径。为空则不启用备份。"
         }
       }
     }

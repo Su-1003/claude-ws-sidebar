@@ -1,12 +1,19 @@
 'use strict';
 
 // 用真实数据跑一遍纯逻辑，验证分组结果。
+// 用法：node check.js [工作区文件路径] [工作区根目录]
+// 例：  node check.js "C:\path\to\workspace.code-workspace" "C:\path\to"
 const path = require('path');
 const lib = require('../lib');
 
-const wsFile = 'E:\\Agent\\Claude\\Claude工作空间.code-workspace';
-const wsRoot = 'E:\\Agent\\Claude';
+const wsFile = process.argv[2] || '';
+const wsRoot = process.argv[3] || '';
 const projectsDir = lib.defaultProjectsDir();
+
+if (!wsFile && !wsRoot) {
+  console.log('用法: node check.js [工作区文件路径] [工作区根目录]');
+  console.log('  不传参数则使用默认 projects 目录，无工作区过滤');
+}
 
 const workspaces = lib.readWorkspaces(wsFile, wsRoot);
 const sessions = lib.readSessions(projectsDir);
